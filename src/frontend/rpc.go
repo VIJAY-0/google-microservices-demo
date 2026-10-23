@@ -48,6 +48,12 @@ func (fe *frontendServer) getProducts(ctx context.Context) ([]*pb.Product, error
 	return resp.GetProducts(), err
 }
 
+func (fe *frontendServer) searchProducts(ctx context.Context, query string) ([]*pb.Product, error) {
+	resp, err := pb.NewProductCatalogServiceClient(fe.productCatalogSvcConn).
+		SearchProducts(ctx, &pb.SearchProductsRequest{Query: query})
+	return resp.GetResults(), err
+}
+
 func (fe *frontendServer) getProduct(ctx context.Context, id string) (*pb.Product, error) {
 	resp, err := pb.NewProductCatalogServiceClient(fe.productCatalogSvcConn).
 		GetProduct(ctx, &pb.GetProductRequest{Id: id})
