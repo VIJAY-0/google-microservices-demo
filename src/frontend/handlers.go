@@ -462,13 +462,14 @@ func (fe *frontendServer) chatBotHandler(w http.ResponseWriter, r *http.Request)
 	var response LLMResponse
 
 	url := "http://" + fe.shoppingAssistantSvcAddr
-	req, err := http.NewRequest(http.MethodPost, url, r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, r.Body)
 	if err != nil {
 		renderHTTPError(log, r, w, errors.Wrap(err, "failed to create request"), http.StatusInternalServerError)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Request-Id", requestIDFromContext(r.Context()))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		renderHTTPError(log, r, w, errors.Wrap(err, "failed to send request"), http.StatusInternalServerError)
@@ -551,7 +552,7 @@ func renderHTTPError(log logrus.FieldLogger, r *http.Request, w http.ResponseWri
 func injectCommonTemplateData(r *http.Request, payload map[string]interface{}) map[string]interface{} {
 	data := map[string]interface{}{
 		"session_id":        sessionID(r),
-		"request_id":        r.Context().Value(ctxKeyRequestID{}),
+		"request_id":        requestIDFromContext(r.Context()),
 		"user_currency":     currentCurrency(r),
 		"platform_css":      plat.css,
 		"platform_name":     plat.provider,

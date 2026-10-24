@@ -19,6 +19,7 @@ const protoLoader = require('@grpc/proto-loader');
 const charge = require('./charge');
 
 const logger = require('./logger')
+const { getLogger, withRequestContext } = require('./requestContext');
 
 class HipsterShopServer {
   constructor(protoRoot, port = HipsterShopServer.PORT) {
@@ -40,11 +41,11 @@ class HipsterShopServer {
    */
   static ChargeServiceHandler(call, callback) {
     try {
-      logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
+      getLogger(logger).info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
       const response = charge(call.request);
       callback(null, response);
     } catch (err) {
-      console.warn(err);
+      getLogger(logger).warn({ error: String(err) }, 'PaymentService#Charge failed');
       callback(err);
     }
   }
@@ -88,7 +89,11 @@ class HipsterShopServer {
     this.server.addService(
       hipsterShopPackage.PaymentService.service,
       {
-        charge: HipsterShopServer.ChargeServiceHandler.bind(this)
+        charge: withRequestContext(
+          logger,
+          'PaymentService/Charge',
+          HipsterShopServer.ChargeServiceHandler.bind(this)
+        )
       }
     );
 

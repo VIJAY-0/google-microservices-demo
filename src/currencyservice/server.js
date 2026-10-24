@@ -76,6 +76,7 @@ else {
 const path = require('path');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
+const { getLogger, withRequestContext } = require('./requestContext');
 
 const MAIN_PROTO_PATH = path.join(__dirname, './proto/demo.proto');
 const HEALTH_PROTO_PATH = path.join(__dirname, './proto/grpc/health/v1/health.proto');
@@ -126,7 +127,7 @@ function _carry (amount) {
  * Lists the supported currencies
  */
 function getSupportedCurrencies (call, callback) {
-  logger.info('Getting supported currencies...');
+  getLogger(logger).info('Getting supported currencies...');
   _getCurrencyData((data) => {
     callback(null, {currency_codes: Object.keys(data)});
   });
@@ -136,6 +137,7 @@ function getSupportedCurrencies (call, callback) {
  * Converts between currencies
  */
 function convert (call, callback) {
+  const log = getLogger(logger);
   try {
     _getCurrencyData((data) => {
       const request = call.request;
@@ -159,11 +161,11 @@ function convert (call, callback) {
       result.nanos = Math.floor(result.nanos);
       result.currency_code = request.to_code;
 
-      logger.info(`conversion request successful`);
+      log.info('conversion request successful');
       callback(null, result);
     });
   } catch (err) {
-    logger.error(`conversion request failed: ${err}`);
+    log.error(`conversion request failed: ${err}`);
     callback(err.message);
   }
 }
@@ -182,7 +184,10 @@ function check (call, callback) {
 function main () {
   logger.info(`Starting gRPC server on port ${PORT}...`);
   const server = new grpc.Server();
-  server.addService(shopProto.CurrencyService.service, {getSupportedCurrencies, convert});
+  server.addService(shopProto.CurrencyService.service, {
+    getSupportedCurrencies: withRequestContext(logger, 'CurrencyService/GetSupportedCurrencies', getSupportedCurrencies),
+    convert: withRequestContext(logger, 'CurrencyService/Convert', convert)
+  });
   server.addService(healthProto.Health.service, {check});
 
   server.bindAsync(

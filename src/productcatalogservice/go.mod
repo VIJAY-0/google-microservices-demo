@@ -9,6 +9,7 @@ require (
 	cloud.google.com/go/profiler v0.6.0
 	cloud.google.com/go/secretmanager v1.21.0
 	github.com/golang/protobuf v1.5.4
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.10.2

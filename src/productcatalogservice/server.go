@@ -132,7 +132,9 @@ func run(port string) string {
 			propagation.TraceContext{}, propagation.Baggage{}))
 	var srv *grpc.Server
 	srv = grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()))
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(requestIDUnaryServerInterceptor(log)),
+	)
 
 	svc := &productCatalog{}
 	err = loadCatalog(&svc.catalog)

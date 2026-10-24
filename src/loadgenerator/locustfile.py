@@ -15,10 +15,14 @@
 # limitations under the License.
 
 import random
+import uuid
 from locust import FastHttpUser, TaskSet, between
 from faker import Faker
 import datetime
 fake = Faker()
+
+def rid_headers():
+    return {'X-Request-Id': str(uuid.uuid4())}
 
 products = [
     '0PUK6V6EV0',
@@ -32,28 +36,28 @@ products = [
     'OLJCESPC7Z']
 
 def index(l):
-    l.client.get("/")
+    l.client.get("/", headers=rid_headers())
 
 def setCurrency(l):
     currencies = ['EUR', 'USD', 'JPY', 'CAD', 'GBP', 'TRY']
     l.client.post("/setCurrency",
-        {'currency_code': random.choice(currencies)})
+        {'currency_code': random.choice(currencies)}, headers=rid_headers())
 
 def browseProduct(l):
-    l.client.get("/product/" + random.choice(products))
+    l.client.get("/product/" + random.choice(products), headers=rid_headers())
 
 def viewCart(l):
-    l.client.get("/cart")
+    l.client.get("/cart", headers=rid_headers())
 
 def addToCart(l):
     product = random.choice(products)
-    l.client.get("/product/" + product)
+    l.client.get("/product/" + product, headers=rid_headers())
     l.client.post("/cart", {
         'product_id': product,
-        'quantity': random.randint(1,10)})
-    
+        'quantity': random.randint(1,10)}, headers=rid_headers())
+
 def empty_cart(l):
-    l.client.post('/cart/empty')
+    l.client.post('/cart/empty', headers=rid_headers())
 
 def checkout(l):
     addToCart(l)
@@ -69,10 +73,10 @@ def checkout(l):
         'credit_card_expiration_month': random.randint(1, 12),
         'credit_card_expiration_year': random.randint(current_year, current_year + 70),
         'credit_card_cvv': f"{random.randint(100, 999)}",
-    })
-    
+    }, headers=rid_headers())
+
 def logout(l):
-    l.client.get('/logout')  
+    l.client.get('/logout', headers=rid_headers())
 
 
 class UserBehavior(TaskSet):

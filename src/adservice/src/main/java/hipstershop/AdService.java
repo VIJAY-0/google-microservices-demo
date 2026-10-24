@@ -24,6 +24,7 @@ import hipstershop.Demo.AdRequest;
 import hipstershop.Demo.AdResponse;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptors;
 import io.grpc.StatusRuntimeException;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.services.*;
@@ -56,7 +57,8 @@ public final class AdService {
 
     server =
         ServerBuilder.forPort(port)
-            .addService(new AdServiceImpl())
+            .addService(
+                ServerInterceptors.intercept(new AdServiceImpl(), new RequestContextInterceptor()))
             .addService(healthMgr.getHealthService())
             .build()
             .start();
@@ -95,7 +97,12 @@ public final class AdService {
       AdService service = AdService.getInstance();
       try {
         List<Ad> allAds = new ArrayList<>();
-        logger.info("received ad request (context_words=" + req.getContextKeysList() + ")");
+        logger.info(
+            "received ad request (request_id="
+                + RequestContextInterceptor.getRequestId()
+                + ", context_words="
+                + req.getContextKeysList()
+                + ")");
         if (req.getContextKeysCount() > 0) {
           for (int i = 0; i < req.getContextKeysCount(); i++) {
             Collection<Ad> ads = service.getAdsByCategory(req.getContextKeys(i));

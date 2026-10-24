@@ -25,7 +25,6 @@ import (
 )
 
 type ctxKeyLog struct{}
-type ctxKeyRequestID struct{}
 
 type logHandler struct {
 	log  *logrus.Logger
@@ -56,15 +55,19 @@ func (r *responseRecorder) WriteHeader(statusCode int) {
 
 func (lh *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	requestID, _ := uuid.NewRandom()
-	ctx = context.WithValue(ctx, ctxKeyRequestID{}, requestID.String())
+	requestID := r.Header.Get(requestIDHeader)
+	if !validRequestID(requestID) {
+		requestID = newRequestID()
+	}
+	ctx = withRequestID(ctx, requestID)
 
 	start := time.Now()
 	rr := &responseRecorder{w: w}
+	w.Header().Set("X-Request-Id", requestID)
 	log := lh.log.WithFields(logrus.Fields{
 		"http.req.path":   r.URL.Path,
 		"http.req.method": r.Method,
-		"http.req.id":     requestID.String(),
+		"request_id":      requestID,
 	})
 	if v, ok := r.Context().Value(ctxKeySessionID{}).(string); ok {
 		log = log.WithField("session", v)

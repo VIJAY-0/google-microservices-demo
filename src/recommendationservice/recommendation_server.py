@@ -38,6 +38,11 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from logger import getJSONLogger
+from request_context import (
+  RequestContextServerInterceptor,
+  request_id_from_context,
+  request_id_metadata,
+)
 logger = getJSONLogger('recommendationservice-server')
 
 def initStackdriverProfiling():
@@ -70,7 +75,8 @@ class RecommendationService(demo_pb2_grpc.RecommendationServiceServicer):
     def ListRecommendations(self, request, context):
         max_responses = 5
         # fetch list of products from product catalog stub
-        cat_response = product_catalog_stub.ListProducts(demo_pb2.Empty())
+        cat_response = product_catalog_stub.ListProducts(
+            demo_pb2.Empty(), metadata=request_id_metadata(context))
         product_ids = [x.id for x in cat_response.products]
         filtered_products = list(set(product_ids)-set(request.product_ids))
         num_products = len(filtered_products)
@@ -79,7 +85,9 @@ class RecommendationService(demo_pb2_grpc.RecommendationServiceServicer):
         indices = random.sample(range(num_products), num_return)
         # fetch product ids from indices
         prod_list = [filtered_products[i] for i in indices]
-        logger.info("[Recv ListRecommendations] product_ids={}".format(prod_list))
+        logger.info(
+            "[Recv ListRecommendations] product_ids={}".format(prod_list),
+            extra={'request_id': request_id_from_context(context)})
         # build and return response
         response = demo_pb2.ListRecommendationsResponse()
         response.product_ids.extend(prod_list)
@@ -136,7 +144,9 @@ if __name__ == "__main__":
     product_catalog_stub = demo_pb2_grpc.ProductCatalogServiceStub(channel)
 
     # create gRPC server
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=(RequestContextServerInterceptor(logger),))
 
     # add class to gRPC server
     service = RecommendationService()

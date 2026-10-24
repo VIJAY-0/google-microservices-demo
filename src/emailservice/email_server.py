@@ -40,6 +40,7 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 # import googlecloudprofiler
 
 from logger import getJSONLogger
+from request_context import RequestContextServerInterceptor, request_id_from_context
 logger = getJSONLogger('emailservice-server')
 
 # Loads confirmation email template from file
@@ -107,7 +108,9 @@ class EmailService(BaseEmailService):
 
 class DummyEmailService(BaseEmailService):
   def SendOrderConfirmation(self, request, context):
-    logger.info('A request to send order confirmation email to {} has been received.'.format(request.email))
+    logger.info(
+      'A request to send order confirmation email to {} has been received.'.format(request.email),
+      extra={'request_id': request_id_from_context(context)})
     return demo_pb2.Empty()
 
 class HealthCheck():
@@ -116,7 +119,10 @@ class HealthCheck():
       status=health_pb2.HealthCheckResponse.SERVING)
 
 def start(dummy_mode):
-  server = grpc.server(futures.ThreadPoolExecutor(max_workers=10),)
+  server = grpc.server(
+    futures.ThreadPoolExecutor(max_workers=10),
+    interceptors=(RequestContextServerInterceptor(logger),)
+  )
   service = None
   if dummy_mode:
     service = DummyEmailService()

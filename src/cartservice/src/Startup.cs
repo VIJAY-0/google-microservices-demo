@@ -56,7 +56,10 @@ namespace cartservice
             }
 
 
-            services.AddGrpc();
+            services.AddGrpc(options =>
+            {
+                options.Interceptors.Add<RequestContextInterceptor>();
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
