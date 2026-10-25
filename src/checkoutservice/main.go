@@ -83,6 +83,8 @@ type checkoutService struct {
 
 	paymentSvcAddr string
 	paymentSvcConn *grpc.ClientConn
+
+	idempotency *idempotencyStore
 }
 
 func main() {
@@ -121,6 +123,8 @@ func main() {
 	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr)
 	mustConnGRPC(ctx, &svc.emailSvcConn, svc.emailSvcAddr)
 	mustConnGRPC(ctx, &svc.paymentSvcConn, svc.paymentSvcAddr)
+
+	svc.idempotency = newIdempotencyStore(idempotencyTTL())
 
 	log.Infof("service config: %+v", svc)
 
@@ -228,6 +232,19 @@ func (cs *checkoutService) Watch(req *healthpb.HealthCheckRequest, ws healthpb.H
 }
 
 func (cs *checkoutService) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (*pb.PlaceOrderResponse, error) {
+	key := idempotencyKeyFromIncomingMetadata(ctx)
+	if key == "" {
+		return cs.placeOrder(ctx, req)
+	}
+
+	ctx = withIdempotencyKey(ctx, key)
+	cacheKey := req.UserId + ":" + key
+	return cs.idempotency.Do(ctx, cacheKey, func() (*pb.PlaceOrderResponse, error) {
+		return cs.placeOrder(ctx, req)
+	})
+}
+
+func (cs *checkoutService) placeOrder(ctx context.Context, req *pb.PlaceOrderRequest) (*pb.PlaceOrderResponse, error) {
 	log.Infof("[PlaceOrder] user_id=%q user_currency=%q", req.UserId, req.UserCurrency)
 
 	orderID, err := uuid.NewUUID()
@@ -367,6 +384,7 @@ func (cs *checkoutService) convertCurrency(ctx context.Context, from *pb.Money, 
 }
 
 func (cs *checkoutService) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
+	ctx = outgoingIdempotencyContext(ctx)
 	paymentResp, err := pb.NewPaymentServiceClient(cs.paymentSvcConn).Charge(ctx, &pb.ChargeRequest{
 		Amount:     amount,
 		CreditCard: paymentInfo})
@@ -377,6 +395,7 @@ func (cs *checkoutService) chargeCard(ctx context.Context, amount *pb.Money, pay
 }
 
 func (cs *checkoutService) sendOrderConfirmation(ctx context.Context, email string, order *pb.OrderResult) error {
+	ctx = outgoingIdempotencyContext(ctx)
 	_, err := pb.NewEmailServiceClient(cs.emailSvcConn).SendOrderConfirmation(ctx, &pb.SendOrderConfirmationRequest{
 		Email: email,
 		Order: order})
