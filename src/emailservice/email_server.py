@@ -30,6 +30,8 @@ import demo_pb2_grpc
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
+from idempotency import IdempotencyCache, idempotency_key_from_context
+
 from opentelemetry import trace
 from opentelemetry.instrumentation.grpc import GrpcInstrumentorServer
 from opentelemetry.sdk.trace import TracerProvider
@@ -106,7 +108,16 @@ class EmailService(BaseEmailService):
     return demo_pb2.Empty()
 
 class DummyEmailService(BaseEmailService):
+  def __init__(self):
+    super().__init__()
+    self.processed_keys = IdempotencyCache()
+
   def SendOrderConfirmation(self, request, context):
+    key = idempotency_key_from_context(context)
+    if self.processed_keys.seen(key):
+      logger.info('Skipping duplicate order confirmation email to {} for idempotency key {}'.format(request.email, key))
+      return demo_pb2.Empty()
+
     logger.info('A request to send order confirmation email to {} has been received.'.format(request.email))
     return demo_pb2.Empty()
 

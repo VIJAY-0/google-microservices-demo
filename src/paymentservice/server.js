@@ -17,8 +17,14 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 
 const charge = require('./charge');
+const {
+  IdempotencyCache,
+  idempotencyKeyFromMetadata
+} = require('./idempotency');
 
 const logger = require('./logger')
+
+const idempotencyCache = new IdempotencyCache();
 
 class HipsterShopServer {
   constructor(protoRoot, port = HipsterShopServer.PORT) {
@@ -41,7 +47,20 @@ class HipsterShopServer {
   static ChargeServiceHandler(call, callback) {
     try {
       logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
+      const idempotencyKey = idempotencyKeyFromMetadata(call.metadata);
+      if (idempotencyKey) {
+        const cached = idempotencyCache.get(idempotencyKey);
+        if (cached) {
+          logger.info(`PaymentService#Charge replaying charge for idempotency key ${idempotencyKey}`);
+          callback(null, cached);
+          return;
+        }
+      }
+
       const response = charge(call.request);
+      if (idempotencyKey) {
+        idempotencyCache.set(idempotencyKey, response);
+      }
       callback(null, response);
     } catch (err) {
       console.warn(err);
